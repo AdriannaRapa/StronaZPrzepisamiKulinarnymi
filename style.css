@@ -284,7 +284,7 @@ footer a:hover { /* Stylizacja linków w stopce po najechaniu */
 
 /* Przystawki */
 .bg-appetizers {
-  background-image: url('appetizers1.png');
+  background-image: url('appetizers.png');
   background-size: cover;
   background-position: center;
   color: rgb(0, 0, 0);
@@ -349,7 +349,7 @@ footer a:hover { /* Stylizacja linków w stopce po najechaniu */
 }
 
 .bg-add_recipes {
-  background-image: url('add_recipes1.png'); /* Ścieżka do grafiki */
+  background-image: url('add_recipes.png'); /* Ścieżka do grafiki */
   background-size: cover;
   background-position: center;
   color: rgb(0, 0, 0);
