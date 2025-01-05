@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FoodLab - Przepisy</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../static/css/style.css">
 </head>
 <body>
   <!-- Nagłówek -->
@@ -13,7 +13,7 @@
     <div class="container">
       <div class="top-menu">
         <div>
-          <img src="logo.png" alt="FoodLab Logo" class="logo">
+          <img src="../static/images/logo.png" alt="FoodLab Logo" class="logo">
         </div>
         <form class="d-flex search-bar">
           <input class="form-control" type="search" placeholder="Wyszukaj..." aria-label="Wyszukaj">
@@ -45,69 +45,15 @@
       <button class="btn btn-outline-dark w-100" onclick="location.href='appetizers.html';">Przystawki</button>
       <button class="btn btn-outline-dark w-100" onclick="location.href='dinners.html';">Obiady</button>
       <button class="btn btn-outline-dark w-100" onclick="location.href='desserts.html';">Desery</button>
-      <button class="btn btn-outline-dark w-100 active" onclick="location.href='suppers.html';">Kolacje</button>
+      <button class="btn btn-outline-dark w-100" onclick="location.href='suppers.html';">Kolacje</button>
       <button class="btn btn-outline-dark w-100" onclick="location.href='snacks.html';">Przekąski</button>
       <button class="btn btn-outline-dark w-100" onclick="location.href='drinks.html';">Napoje</button>
     </aside>
 
-
-        <!-- Treść podstrony -->
-        <main class="flex-grow-1">
-
-          <div class="header-container bg-suppers d-flex justify-content-between align-items-center mb-4">
-      <h2 class="text-white m-0"></h2>
-      <div class="dropdown">
-        <button class="btn btn-light dropdown-toggle" type="button" id="sort-options" data-bs-toggle="dropdown" aria-expanded="false">
-          Sortuj wg
-        </button>
-        <ul class="dropdown-menu" aria-labelledby="sort-options">
-          <li class="dropdown-item">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sortOption" id="sort-date-asc" checked>
-              <label class="form-check-label" for="sort-date-asc">Data dodania (rosnąco)</label>
-            </div>
-          </li>
-          <li class="dropdown-item">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sortOption" id="sort-date-desc">
-              <label class="form-check-label" for="sort-date-desc">Data dodania (malejąco)</label>
-            </div>
-          </li>
-          <li class="dropdown-item">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sortOption" id="sort-az">
-              <label class="form-check-label" for="sort-az">A-Z</label>
-            </div>
-          </li>
-          <li class="dropdown-item">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="sortOption" id="sort-za">
-              <label class="form-check-label" for="sort-za">Z-A</label>
-            </div>
-          </li>
-        </ul>
-      </div>
-    </div>
-
+    <!-- Treść podstrony -->
+    <main class="flex-grow-1">
+      <h2 class="text-center border p-2 mb-4">Przepisy</h2>
       <div class="row">
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 1</div>
-        </div>
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 2</div>
-        </div>
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 3</div>
-        </div>
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 4</div>
-        </div>
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 5</div>
-        </div>
-        <div class="col-md-6 mb-4">
-          <div class="border p-4 text-center">Przepis 6</div>
-        </div>
         <div class="col-md-6 mb-4">
           <div class="border p-4 text-center">Przepis 1</div>
         </div>
@@ -142,8 +88,5 @@
       document.querySelector('.main-nav').classList.toggle('show');
     });
   </script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>
