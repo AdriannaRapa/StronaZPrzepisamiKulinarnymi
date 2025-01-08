@@ -39,3 +39,9 @@ class Favorite(db.Model):
 
     def __repr__(self):
         return f'<Favorite UserID: {self.user_id}, RecipeID: {self.recipe_id}>'
+
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    gram_to_ml = db.Column(db.Float, nullable=False)  # Współczynnik gram <-> ml

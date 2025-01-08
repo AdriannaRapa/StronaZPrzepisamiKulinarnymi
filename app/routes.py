@@ -1,5 +1,8 @@
-from app.models import User, Recipe
 from flask import Blueprint, request, jsonify, render_template
+from flask_login import login_user, current_user, login_required
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.models import User, Recipe, Product
+from app import db
 
 main = Blueprint('main', __name__)
 
@@ -22,136 +25,143 @@ def get_recipes():
         } for recipe in recipes
     ])
 
-# Dodawanie nowego przepisu
+# Dodawanie nowego przepisu (tylko dla zalogowanych użytkowników)
 @main.route('/recipes', methods=['POST'])
+@login_required
 def add_recipe():
     data = request.json
+
+    # Tworzenie przepisu z przypisaniem do zalogowanego użytkownika
     new_recipe = Recipe(
         name=data['name'],
         category=data['category'],
         ingredients=data['ingredients'],
         steps=data['steps'],
-        user_id=data['user_id']
+        user_id=current_user.id  # Przepis należy do aktualnie zalogowanego użytkownika
     )
-    db.session.add(new_recipe)
-    db.session.commit()
-    return jsonify({"message": "Przepis został dodany pomyślnie!"}), 201
+    try:
+        db.session.add(new_recipe)
+        db.session.commit()
+        return jsonify({"message": "Przepis został dodany pomyślnie!"}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Błąd podczas dodawania przepisu: {str(e)}"}), 500
 
-# Endpoints dla podstron
-@main.route('/converter.html')
-def converter():
-    return render_template('converter.html')
+# Endpointy do renderowania stron HTML (dynamiczne)
+@main.route('/<page>.html')
+def render_page(page):
+    try:
+        return render_template(f"{page}.html")
+    except Exception:
+        return "Strona nie została znaleziona", 404
 
-@main.route('/register.html')
-def register():
-    return render_template('register.html')
-
-@main.route('/login.html')
-def login():
-    return render_template('login.html')
-
-@main.route('/favourites.html')
-def favourites():
-    return render_template('favourites.html')
-
-@main.route('/forum.html')
-def forum():
-    return render_template('forum.html')
-
-@main.route('/faq.html')
-def faq():
-    return render_template('faq.html')
-
-@main.route('/regulamin.html')
-def regulamin():
-    return render_template('regulamin.html')
-
-@main.route('/contact.html')
-def contact():
-    return render_template('contact.html')
-
-@main.route('/dinners.html')
-def dinners():
-    return render_template('dinners.html')
-
-@main.route('/map.html')
-def map():
-    return render_template('map.html')
-
-@main.route('/breakfast.html')
-def breakfast():
-    return render_template('breakfast.html')
-
-@main.route('/drinks.html')
-def drinks():
-    return render_template('drinks.html')
-
-@main.route('/snacks.html')
-def snacks():
-    return render_template('snacks.html')
-
-@main.route('/appetizers.html')
-def appetizers():
-    return render_template('appetizers.html')
-
-@main.route('/suppers.html')
-def suppers():
-    return render_template('suppers.html')
-
-@main.route('/desserts.html')
-def desserts():
-    return render_template('desserts.html')
-
-@main.route('/add_recipes.html')
-def add_recipes():
-    return render_template('add_recipes.html')
-
-@main.route('/recipes.html')
-def recipes():
-    return render_template('recipes.html')
-
-
-@main.route('/index.html')
-def index():
-    return render_template('index.html')
-
-
-from werkzeug.security import generate_password_hash
-from flask import Blueprint, request, jsonify
-from app.models import User
-from app import db
-
-
+# Rejestracja użytkownika
 @main.route('/register', methods=['POST'])
 def register_user():
     data = request.json
 
-    # Sprawdzenie, czy wszystkie pola są obecne
     if not data.get('name') or not data.get('email') or not data.get('password'):
         return jsonify({"error": "Wszystkie pola są wymagane"}), 400
 
-    # Sprawdzenie, czy użytkownik już istnieje
     existing_user = User.query.filter_by(email=data['email']).first()
     if existing_user:
         return jsonify({"error": "Użytkownik z takim e-mailem już istnieje"}), 400
 
-    # Utworzenie nowego użytkownika i zapisanie do bazy
     new_user = User(
         name=data['name'],
         email=data['email'],
-        password=data['password']  # Zapisujemy hasło bezpośrednio
+        password=data['password']  # Zapisywanie hasła w jawnej formie (niesugerowane do produkcji)
     )
-
     db.session.add(new_user)
     db.session.commit()
 
     return jsonify({"message": "Rejestracja zakończona sukcesem!"}), 201
 
 
+
+# Logowanie użytkownika
+@main.route('/login', methods=['POST'])
+def login_user_route():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({"error": "Proszę podać e-mail i hasło"}), 400
+
+    # Debugowanie: sprawdź, jakie dane są przesyłane
+    print(f"Logowanie: email={email}, password={password}")
+
+    # Znajdź użytkownika w bazie
+    user = User.query.filter_by(email=email).first()
+
+    if user:
+        print(f"Znaleziono użytkownika: {user.email}, password in DB: {user.password}")
+    else:
+        print("Użytkownik nie został znaleziony")
+
+    # Porównanie hasła
+    if user and user.password == password:
+        login_user(user)
+        print("Hasło poprawne, logowanie użytkownika")
+        return jsonify({"message": "Zalogowano pomyślnie"}), 200
+    else:
+        print("Nieprawidłowy e-mail lub hasło")
+        return jsonify({"error": "Nieprawidłowy e-mail lub hasło"}), 401
+
+
+
+# Test połączenia z bazą danych
 @main.route('/test_db')
 def test_db():
     try:
-        result = db.session.execute('SELECT 1')
+        db.session.execute('SELECT 1')
         return "Połączenie z bazą działa!", 200
     except Exception as e:
         return f"Błąd połączenia z bazą: {e}", 500
+
+
+# Przelicznik kuchenny - jednostki
+@main.route('/api/convert', methods=['POST'])
+def convert_units():
+    data = request.json
+    product_name = data.get('product')
+    input_value = data.get('value')
+    input_unit = data.get('input_unit')
+    output_unit = data.get('output_unit')
+
+    # Pobranie danych o produkcie
+    product = Product.query.filter_by(name=product_name).first()
+    if not product:
+        return jsonify({"error": "Nie znaleziono produktu"}), 404
+
+    # Przeliczanie jednostek
+    conversion_factor = product.gram_to_ml if input_unit == 'ml' and output_unit == 'gram' else 1 / product.gram_to_ml
+    result = input_value * conversion_factor
+
+    return jsonify({
+        "input_value": input_value,
+        "input_unit": input_unit,
+        "output_value": round(result, 2),
+        "output_unit": output_unit
+    })
+
+# Przelicznik foremek
+@main.route('/api/convert_shape', methods=['POST'])
+def convert_shape():
+    data = request.json
+    recipe_width = data.get('recipe_width')
+    recipe_height = data.get('recipe_height')
+    home_width = data.get('home_width')
+    home_height = data.get('home_height')
+
+    if not all([recipe_width, recipe_height, home_width, home_height]):
+        return jsonify({"error": "Brak wymiarów foremki"}), 400
+
+    recipe_volume = recipe_width * recipe_height
+    home_volume = home_width * home_height
+    scaling_factor = home_volume / recipe_volume
+
+    return jsonify({
+        "scaling_factor": round(scaling_factor, 2)
+    })
