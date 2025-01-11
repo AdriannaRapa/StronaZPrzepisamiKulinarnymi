@@ -1,6 +1,7 @@
 from app import db
+from flask_login import UserMixin
 
-class User(db.Model):
+class User(db.Model, UserMixin):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
@@ -39,7 +40,6 @@ class Favorite(db.Model):
 
     def __repr__(self):
         return f'<Favorite UserID: {self.user_id}, RecipeID: {self.recipe_id}>'
-
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)

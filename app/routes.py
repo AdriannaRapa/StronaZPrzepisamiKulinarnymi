@@ -1,10 +1,29 @@
-from flask import Blueprint, request, jsonify, render_template
-from flask_login import login_user, current_user, login_required
-from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import User, Recipe, Product
+from flask import Blueprint, request, jsonify, render_template, current_app
+from app.models import User
+from flask_login import login_user, logout_user
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask_login import login_required, current_user
 from app import db
 
+
+
+
+
 main = Blueprint('main', __name__)
+
+
+@main.route('/login', methods=['POST'])
+def login():
+    email = request.json.get('email')
+    password = request.json.get('password')
+    user = User.query.filter_by(email=email).first()
+
+    if user and check_password_hash(user.password, password):
+        login_user(user)
+        return jsonify({"message": "Zalogowano pomyślnie", "redirect_url": "/account.html"}), 200
+    else:
+        return jsonify({"message": "Nieprawidłowy e-mail lub hasło"}), 401
+
 
 # Strona główna
 @main.route('/')
@@ -31,13 +50,12 @@ def get_recipes():
 def add_recipe():
     data = request.json
 
-    # Tworzenie przepisu z przypisaniem do zalogowanego użytkownika
     new_recipe = Recipe(
         name=data['name'],
         category=data['category'],
         ingredients=data['ingredients'],
         steps=data['steps'],
-        user_id=current_user.id  # Przepis należy do aktualnie zalogowanego użytkownika
+        user_id=current_user.id
     )
     try:
         db.session.add(new_recipe)
@@ -59,7 +77,6 @@ def render_page(page):
 @main.route('/register', methods=['POST'])
 def register_user():
     data = request.json
-
     if not data.get('name') or not data.get('email') or not data.get('password'):
         return jsonify({"error": "Wszystkie pola są wymagane"}), 400
 
@@ -67,10 +84,14 @@ def register_user():
     if existing_user:
         return jsonify({"error": "Użytkownik z takim e-mailem już istnieje"}), 400
 
+    # Hashowanie hasła
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+
+
     new_user = User(
         name=data['name'],
         email=data['email'],
-        password=data['password']  # Zapisywanie hasła w jawnej formie (niesugerowane do produkcji)
+        password=hashed_password
     )
     db.session.add(new_user)
     db.session.commit()
@@ -78,36 +99,6 @@ def register_user():
     return jsonify({"message": "Rejestracja zakończona sukcesem!"}), 201
 
 
-
-# Logowanie użytkownika
-@main.route('/login', methods=['POST'])
-def login_user_route():
-    data = request.json
-    email = data.get('email')
-    password = data.get('password')
-
-    if not email or not password:
-        return jsonify({"error": "Proszę podać e-mail i hasło"}), 400
-
-    # Debugowanie: sprawdź, jakie dane są przesyłane
-    print(f"Logowanie: email={email}, password={password}")
-
-    # Znajdź użytkownika w bazie
-    user = User.query.filter_by(email=email).first()
-
-    if user:
-        print(f"Znaleziono użytkownika: {user.email}, password in DB: {user.password}")
-    else:
-        print("Użytkownik nie został znaleziony")
-
-    # Porównanie hasła
-    if user and user.password == password:
-        login_user(user)
-        print("Hasło poprawne, logowanie użytkownika")
-        return jsonify({"message": "Zalogowano pomyślnie"}), 200
-    else:
-        print("Nieprawidłowy e-mail lub hasło")
-        return jsonify({"error": "Nieprawidłowy e-mail lub hasło"}), 401
 
 
 
@@ -120,7 +111,6 @@ def test_db():
     except Exception as e:
         return f"Błąd połączenia z bazą: {e}", 500
 
-
 # Przelicznik kuchenny - jednostki
 @main.route('/api/convert', methods=['POST'])
 def convert_units():
@@ -130,12 +120,10 @@ def convert_units():
     input_unit = data.get('input_unit')
     output_unit = data.get('output_unit')
 
-    # Pobranie danych o produkcie
     product = Product.query.filter_by(name=product_name).first()
     if not product:
         return jsonify({"error": "Nie znaleziono produktu"}), 404
 
-    # Przeliczanie jednostek
     conversion_factor = product.gram_to_ml if input_unit == 'ml' and output_unit == 'gram' else 1 / product.gram_to_ml
     result = input_value * conversion_factor
 
@@ -165,3 +153,78 @@ def convert_shape():
     return jsonify({
         "scaling_factor": round(scaling_factor, 2)
     })
+
+@main.route('/account', methods=['GET'])
+@login_required
+def account_page():
+    return render_template('account.html')
+
+
+@main.route('/account/data', methods=['GET'])
+@login_required
+def account_data():
+    user_data = {
+        "name": current_user.name,
+        "email": current_user.email,
+        "recipes": [
+            {
+                "id": recipe.id,
+                "name": recipe.name,
+                "category": recipe.category,
+                "ingredients": recipe.ingredients,
+                "steps": recipe.steps,
+            } for recipe in current_user.recipes  # Relacja `User` -> `Recipe`
+        ],
+        "favorites": [
+            {
+                "id": fav.recipe.id,
+                "name": fav.recipe.name,
+                "category": fav.recipe.category
+            } for fav in current_user.favorites  # Relacja `User` -> `Favorite`
+        ]
+    }
+    return jsonify(user_data), 200
+
+
+
+@main.route('/is_logged_in', methods=['GET'])
+def is_logged_in():
+    if current_user.is_authenticated:
+        return jsonify({"logged_in": True}), 200
+    return jsonify({"logged_in": False}), 200
+
+
+@main.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    try:
+        logout_user()
+        return jsonify({"message": "Wylogowano pomyślnie"}), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas wylogowywania: {str(e)}")
+        return jsonify({"error": f"Błąd podczas wylogowywania: {str(e)}"}), 500
+
+
+
+
+@main.route('/test_login', methods=['POST'])
+def test_login():
+    email = request.json.get('email')
+    password = request.json.get('password')
+
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        return jsonify({"error": "Użytkownik nie istnieje"}), 404
+
+    if check_password_hash(user.password, password):
+        return jsonify({"message": "Logowanie działa poprawnie!"}), 200
+    else:
+        return jsonify({"error": "Nieprawidłowe hasło"}), 401
+
+
+@main.route('/session_status', methods=['GET'])
+def session_status():
+    if current_user.is_authenticated:
+        return jsonify({"status": "authenticated", "user_id": current_user.id}), 200
+    return jsonify({"status": "unauthenticated"}), 200
