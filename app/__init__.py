@@ -20,9 +20,9 @@ def create_app():
     app.config['MAIL_PORT'] = 465
     app.config['MAIL_USE_SSL'] = True  # Włącz SSL
     app.config['MAIL_USE_TLS'] = False
-    app.config['MAIL_USERNAME'] = 'foodlab@interia.pl'  # Zastąp swoim e-mailem
-    app.config['MAIL_PASSWORD'] = 'PoliBuda#321'          # Zastąp swoim hasłem
-    app.config['MAIL_DEFAULT_SENDER'] = 'foodlab@interia.pl'
+    app.config['MAIL_USERNAME'] = 'example@interia.pl'  # Zastąp swoim e-mailem
+    app.config['MAIL_PASSWORD'] = 'twojehaslo'          # Zastąp swoim hasłem
+    app.config['MAIL_DEFAULT_SENDER'] = 'example@interia.pl'
     app.config['MAIL_DEBUG'] = True
 
     # Inicjalizacja bazy danych i LoginManager
