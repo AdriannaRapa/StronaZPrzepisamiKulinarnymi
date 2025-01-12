@@ -15,7 +15,7 @@ def create_app():
 
 
 
-    # Konfiguracja serwera SMTP (przykład dla interii)
+    # Konfiguracja serwera SMTP (przykład dla interi)
     app.config['MAIL_SERVER'] = 'poczta.interia.pl'
     app.config['MAIL_PORT'] = 465
     app.config['MAIL_USE_SSL'] = True  # Włącz SSL

@@ -487,3 +487,21 @@ document.getElementById('delete-account').addEventListener('click', function () 
     });
   }
 });
+
+document.addEventListener("DOMContentLoaded", function () {
+  fetch("/is_logged_in") // Endpoint sprawdzający, czy użytkownik jest zalogowany
+    .then(response => response.json())
+    .then(data => {
+      const overlay = document.getElementById("overlay-add-recipe");
+
+      if (!data.logged_in) {
+        // Jeśli użytkownik nie jest zalogowany, pokaż nakładkę
+        overlay.classList.remove("hidden");
+      } else {
+        // Jeśli użytkownik jest zalogowany, ukryj nakładkę
+        overlay.classList.add("hidden");
+      }
+    })
+    .catch(error => console.error("Błąd sprawdzania statusu logowania:", error));
+});
+
