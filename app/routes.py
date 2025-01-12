@@ -1,28 +1,51 @@
-from flask import Blueprint, request, jsonify, render_template, current_app
-from app.models import User
+from flask import Blueprint, flash, redirect, request, jsonify, url_for, render_template, current_app, session
+from app.models import User, Favorite, Recipe
 from flask_login import login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import login_required, current_user
-from app import db
-
-
-
+import re
+from flask_mail import Message
+from app import mail, db
+import secrets
 
 
 main = Blueprint('main', __name__)
 
 
-@main.route('/login', methods=['POST'])
+@main.route('/login', methods=['GET', 'POST'])
 def login():
-    email = request.json.get('email')
-    password = request.json.get('password')
-    user = User.query.filter_by(email=email).first()
+    if request.method == 'GET':
+        # Wyświetlenie formularza logowania
+        return render_template('login.html')
 
-    if user and check_password_hash(user.password, password):
-        login_user(user)
-        return jsonify({"message": "Zalogowano pomyślnie", "redirect_url": "/account.html"}), 200
-    else:
-        return jsonify({"message": "Nieprawidłowy e-mail lub hasło"}), 401
+    if request.method == 'POST':
+        # Sprawdzenie, czy dane są przesyłane w formacie JSON
+        if request.is_json:
+            data = request.get_json()
+            email = data.get('email')
+            password = data.get('password')
+        else:
+            # Dane z formularza HTML
+            email = request.form.get('email')
+            password = request.form.get('password')
+
+        # Logika sprawdzania danych użytkownika
+        user = User.query.filter_by(email=email).first()
+
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            # Odpowiedź JSON, jeśli żądanie pochodzi z JavaScript
+            if request.is_json:
+                return jsonify({"message": "Zalogowano pomyślnie", "redirect_url": "/account.html"}), 200
+            # Przekierowanie, jeśli pochodzi z formularza HTML
+            return redirect(url_for('main.account'))
+
+        # Obsługa błędów logowania
+        if request.is_json:
+            return jsonify({"message": "Nieprawidłowy e-mail lub hasło"}), 401
+        else:
+            flash("Nieprawidłowy e-mail lub hasło")
+            return redirect(url_for('main.login'))
 
 
 # Strona główna
@@ -87,18 +110,23 @@ def register_user():
     # Hashowanie hasła
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
 
-
     new_user = User(
         name=data['name'],
         email=data['email'],
         password=hashed_password
     )
-    db.session.add(new_user)
-    db.session.commit()
+    try:
+        db.session.add(new_user)
+        db.session.commit()
 
-    return jsonify({"message": "Rejestracja zakończona sukcesem!"}), 201
+        # Wyślij e-mail powitalny
+        send_welcome_email(new_user.email, new_user.name)
 
+        return jsonify({"message": "Rejestracja zakończona sukcesem!"}), 201
 
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Błąd podczas rejestracji: {str(e)}"}), 500
 
 
 
@@ -205,8 +233,6 @@ def logout():
         return jsonify({"error": f"Błąd podczas wylogowywania: {str(e)}"}), 500
 
 
-
-
 @main.route('/test_login', methods=['POST'])
 def test_login():
     email = request.json.get('email')
@@ -228,3 +254,247 @@ def session_status():
     if current_user.is_authenticated:
         return jsonify({"status": "authenticated", "user_id": current_user.id}), 200
     return jsonify({"status": "unauthenticated"}), 200
+
+
+@main.route('/api/user', methods=['GET'])
+def get_user_data():
+    user = current_user
+    if user.is_authenticated:
+        return jsonify({
+            "name": user.name,
+            "email": user.email,
+            "password": "********",  # Hasło ukryte
+            "join_date": user.join_date.strftime('%Y-%m-%d')
+        })
+    return jsonify({"error": "User not authenticated"}), 401
+
+
+@main.route('/api/user/update_name', methods=['POST'])
+@login_required
+def update_user_name():
+    new_name = request.json.get('name')
+    if not new_name:
+        return jsonify({"error": "Name cannot be empty"}), 400
+
+    user = current_user
+    user.name = new_name
+    db.session.commit()
+    return jsonify({"message": "Name updated successfully"})
+
+
+@main.route('/api/user/update_email', methods=['POST'])
+@login_required
+def update_user_email():
+    new_email = request.json.get('email')
+
+    # Walidacja formatu e-maila
+    email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    if not re.match(email_regex, new_email):
+        return jsonify({"error": "Niepoprawny format e-maila"}), 400
+
+    # Sprawdź, czy email jest podany
+    if not new_email:
+        return jsonify({"error": "Email nie może być pusty"}), 400
+
+    # Sprawdź, czy nowy email jest unikalny
+    existing_user = User.query.filter_by(email=new_email).first()
+    if existing_user:
+        return jsonify({"error": "Podany e-mail już istnieje w systemie"}), 400
+
+    try:
+        # Aktualizuj email użytkownika
+        user = current_user
+        user.email = new_email
+        db.session.commit()
+        return jsonify({"message": "Adres e-mail został zaktualizowany pomyślnie", "email": new_email}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Błąd podczas aktualizacji e-maila: {str(e)}"}), 500
+
+
+
+@main.route('/api/user/update_password', methods=['POST'])
+@login_required
+def update_password():
+    data = request.json
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+
+    # Walidacja: sprawdź, czy oba pola są wypełnione
+    if not current_password or not new_password:
+        return jsonify({"error": "Oba pola są wymagane"}), 400
+
+    # Sprawdzenie poprawności bieżącego hasła
+    if not check_password_hash(current_user.password, current_password):
+        return jsonify({"error": "Nieprawidłowe bieżące hasło"}), 400
+
+    # Walidacja nowego hasła (długość, inne wymagania)
+    if len(new_password) < 8:
+        return jsonify({"error": "Hasło musi mieć co najmniej 8 znaków"}), 400
+
+    # Zaktualizuj hasło (zahashowane)
+    current_user.password = generate_password_hash(new_password)
+    db.session.commit()
+
+    return jsonify({"message": "Hasło zostało zaktualizowane"}), 200
+
+
+@main.route('/api/recipes/<int:recipe_id>/favorite', methods=['POST'])
+@login_required
+def add_to_favorites(recipe_id):
+    # Sprawdź, czy przepis już jest w ulubionych
+    existing_favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
+    if existing_favorite:
+        return jsonify({"message": "Przepis już jest w ulubionych"}), 200
+
+    # Dodaj przepis do ulubionych
+    favorite = Favorite(user_id=current_user.id, recipe_id=recipe_id)
+    db.session.add(favorite)
+    db.session.commit()
+    return jsonify({"message": "Przepis dodany do ulubionych"}), 201
+
+
+
+@main.route('/api/recipes/<int:recipe_id>/favorite', methods=['DELETE'])
+@login_required
+def remove_from_favorites(recipe_id):
+    # Znajdź przepis w ulubionych i usuń go
+    favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
+    if not favorite:
+        return jsonify({"error": "Przepis nie jest w ulubionych"}), 404
+
+    db.session.delete(favorite)
+    db.session.commit()
+    return jsonify({"message": "Przepis usunięty z ulubionych"}), 200
+
+
+@main.route('/api/recipes/favorites', methods=['GET'])
+@login_required
+def get_favorites():
+    favorites = Favorite.query.filter_by(user_id=current_user.id).all()
+    favorite_ids = [favorite.recipe_id for favorite in favorites]
+    return jsonify(favorite_ids), 200
+
+
+
+@main.route('/api/user/favorites', methods=['GET'])
+@login_required
+def get_user_favorites():
+    favorites = Favorite.query.filter_by(user_id=current_user.id).all()
+    favorite_recipes = [
+        {
+            "id": favorite.recipe_id,
+            "name": favorite.recipe.name,  # Relacja do modelu Recipe
+            "description": favorite.recipe.description,
+            "image_url": favorite.recipe.image_url
+        }
+        for favorite in favorites
+    ]
+    return jsonify(favorite_recipes), 200
+
+
+@main.route('/search', methods=['GET'])
+def search():
+    query = request.args.get('query', '').strip()
+    if not query:
+        return redirect(url_for('main.home'))  # Przekierowanie, jeśli brak zapytania
+
+    # Wyszukiwanie w tabeli Recipe
+    results = Recipe.query.filter(
+        Recipe.name.ilike(f"%{query}%") | Recipe.description.ilike(f"%{query}%")
+    ).all()
+
+    return render_template('search_results.html', recipes=results, query=query)
+
+
+@main.route('/delete-account', methods=['DELETE'])
+@login_required
+def delete_account():
+    try:
+        # Pobierz bieżącego użytkownika
+        user = current_user
+
+        # Usuń wszystkie przepisy użytkownika
+        Recipe.query.filter_by(user_id=user.id).delete()
+
+        # Usuń wszystkie ulubione przepisy użytkownika
+        Favorite.query.filter_by(user_id=user.id).delete()
+
+        # Usuń użytkownika z bazy danych
+        db.session.delete(user)
+        db.session.commit()
+
+        # Wyloguj użytkownika i usuń sesję
+        logout_user()
+
+        return jsonify({'message': 'Konto zostało pomyślnie usunięte.'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print('Błąd podczas usuwania konta:', e)
+        return jsonify({'error': 'Błąd serwera podczas usuwania konta.'}), 500
+
+
+# Funkcja do wysyłania e-maila powitalnego
+def send_welcome_email(email, name):
+    try:
+        msg = Message(
+            subject="Witamy w FoodLab!",
+            recipients=[email],
+            body=f"Cześć {name},\n\nDziękujemy za rejestrację w FoodLab. Mamy nadzieję, że znajdziesz tu mnóstwo inspiracji kulinarnych!\n\nPozdrawiamy,\nZespół FoodLab"
+        )
+        mail.send(msg)
+        print(f"E-mail powitalny wysłany do {email}")
+    except Exception as e:
+        print(f"Błąd podczas wysyłania e-maila: {e}")
+
+@main.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    email = request.form.get('email')
+
+    # Znajdź użytkownika po e-mailu
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash("Nie znaleziono użytkownika z tym adresem e-mail.", "danger")
+        return redirect(url_for('main.forgot_password_page'))
+
+    # Wygeneruj token i wyślij e-mail
+    reset_token = secrets.token_urlsafe(32)
+    user.reset_token = reset_token
+    db.session.commit()
+
+    reset_url = url_for('main.reset_password', token=reset_token, _external=True)
+    send_reset_email(email, reset_url)
+
+    flash("Link do resetowania hasła został wysłany na podany adres e-mail.", "success")
+    return redirect(url_for('main.login'))  # Przekierowanie na stronę logowania
+
+
+def send_reset_email(email, reset_url):
+    try:
+        msg = Message(
+            subject="Resetowanie hasła - FoodLab",
+            recipients=[email],
+            body=f"Kliknij w poniższy link, aby zresetować swoje hasło:\n{reset_url}\n\nJeśli nie prosiłeś o resetowanie hasła, zignoruj tę wiadomość."
+        )
+        mail.send(msg)
+        print(f"E-mail do resetowania hasła wysłany do {email}")
+    except Exception as e:
+        print(f"Błąd podczas wysyłania e-maila: {e}")
+
+@main.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user:
+        flash("Nieprawidłowy token", "danger")
+        return redirect(url_for('main.login'))  # Endpoint strony logowania
+
+    if request.method == 'POST':
+        new_password = request.form.get('password')
+        user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+        user.reset_token = None
+        db.session.commit()
+        flash("Hasło zostało pomyślnie zresetowane!", "success")
+        return redirect(url_for('main.login'))  # Endpoint strony logowania
+
+    return render_template('reset_password.html')  # Strona resetowania hasła

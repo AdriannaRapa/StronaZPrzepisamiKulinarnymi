@@ -7,6 +7,8 @@ class User(db.Model, UserMixin):
     name = db.Column(db.String(150), nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(256), nullable=False)
+    join_date = db.Column(db.Date, nullable=False, default=db.func.current_date())  # Nowe pole
+    reset_token = db.Column(db.String(100), nullable=True)  # Token do resetowania hasła
 
     # Relacja z tabelą `recipes`
     recipes = db.relationship('Recipe', backref='user', lazy=True)
@@ -24,6 +26,8 @@ class Recipe(db.Model):
     category = db.Column(db.String(50), nullable=False)
     ingredients = db.Column(db.Text, nullable=False)
     steps = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text, nullable=True)  # Pole opisu
+    image_url = db.Column(db.String(255), nullable=True)  # URL obrazka przepisu
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Relacja z tabelą `favorites`
@@ -45,3 +49,4 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     gram_to_ml = db.Column(db.Float, nullable=False)  # Współczynnik gram <-> ml
+
