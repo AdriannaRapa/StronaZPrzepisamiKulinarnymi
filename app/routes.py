@@ -2,12 +2,12 @@ from flask import Blueprint, flash, redirect, request, jsonify, url_for, render_
 from app.models import User, Favorite, Recipe
 from flask_login import login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
-from flask_login import login_required, current_user
 import re
 from flask_mail import Message
 from app import mail, db
 import secrets
-
+from werkzeug.utils import secure_filename
+from flask_login import login_required, current_user
 
 main = Blueprint('main', __name__)
 
@@ -53,40 +53,6 @@ def login():
 def home():
     return render_template('index.html')
 
-# Pobieranie listy przepisów
-@main.route('/recipes', methods=['GET'])
-def get_recipes():
-    recipes = Recipe.query.all()
-    return jsonify([
-        {
-            "id": recipe.id,
-            "name": recipe.name,
-            "category": recipe.category,
-            "ingredients": recipe.ingredients,
-            "steps": recipe.steps
-        } for recipe in recipes
-    ])
-
-# Dodawanie nowego przepisu (tylko dla zalogowanych użytkowników)
-@main.route('/recipes', methods=['POST'])
-@login_required
-def add_recipe():
-    data = request.json
-
-    new_recipe = Recipe(
-        name=data['name'],
-        category=data['category'],
-        ingredients=data['ingredients'],
-        steps=data['steps'],
-        user_id=current_user.id
-    )
-    try:
-        db.session.add(new_recipe)
-        db.session.commit()
-        return jsonify({"message": "Przepis został dodany pomyślnie!"}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": f"Błąd podczas dodawania przepisu: {str(e)}"}), 500
 
 # Endpointy do renderowania stron HTML (dynamiczne)
 @main.route('/<page>.html')
@@ -339,71 +305,20 @@ def update_password():
     return jsonify({"message": "Hasło zostało zaktualizowane"}), 200
 
 
-@main.route('/api/recipes/<int:recipe_id>/favorite', methods=['POST'])
-@login_required
-def add_to_favorites(recipe_id):
-    # Sprawdź, czy przepis już jest w ulubionych
-    existing_favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
-    if existing_favorite:
-        return jsonify({"message": "Przepis już jest w ulubionych"}), 200
-
-    # Dodaj przepis do ulubionych
-    favorite = Favorite(user_id=current_user.id, recipe_id=recipe_id)
-    db.session.add(favorite)
-    db.session.commit()
-    return jsonify({"message": "Przepis dodany do ulubionych"}), 201
-
-
-
-@main.route('/api/recipes/<int:recipe_id>/favorite', methods=['DELETE'])
-@login_required
-def remove_from_favorites(recipe_id):
-    # Znajdź przepis w ulubionych i usuń go
-    favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
-    if not favorite:
-        return jsonify({"error": "Przepis nie jest w ulubionych"}), 404
-
-    db.session.delete(favorite)
-    db.session.commit()
-    return jsonify({"message": "Przepis usunięty z ulubionych"}), 200
-
-
-@main.route('/api/recipes/favorites', methods=['GET'])
-@login_required
-def get_favorites():
-    favorites = Favorite.query.filter_by(user_id=current_user.id).all()
-    favorite_ids = [favorite.recipe_id for favorite in favorites]
-    return jsonify(favorite_ids), 200
-
-
-
-@main.route('/api/user/favorites', methods=['GET'])
-@login_required
-def get_user_favorites():
-    favorites = Favorite.query.filter_by(user_id=current_user.id).all()
-    favorite_recipes = [
-        {
-            "id": favorite.recipe_id,
-            "name": favorite.recipe.name,  # Relacja do modelu Recipe
-            "description": favorite.recipe.description,
-            "image_url": favorite.recipe.image_url
-        }
-        for favorite in favorites
-    ]
-    return jsonify(favorite_recipes), 200
 
 
 @main.route('/search', methods=['GET'])
 def search():
-    query = request.args.get('query', '').strip()
+    query = request.args.get('query', '').strip()  # Pobierz zapytanie z parametrów URL
     if not query:
-        return redirect(url_for('main.home'))  # Przekierowanie, jeśli brak zapytania
+        return render_template('search_results.html', recipes=[], query=query)
 
     # Wyszukiwanie w tabeli Recipe
     results = Recipe.query.filter(
-        Recipe.name.ilike(f"%{query}%") | Recipe.description.ilike(f"%{query}%")
+        (Recipe.name.ilike(f"%{query}%")) | (Recipe.description.ilike(f"%{query}%"))
     ).all()
 
+    # Przekazanie wyników do szablonu
     return render_template('search_results.html', recipes=results, query=query)
 
 
@@ -498,3 +413,123 @@ def reset_password(token):
         return redirect(url_for('main.login'))  # Endpoint strony logowania
 
     return render_template('reset_password.html')  # Strona resetowania hasła
+
+
+
+def allowed_file(filename):
+    allowed_extensions = current_app.config['ALLOWED_EXTENSIONS']
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+@main.route('/recipes', methods=['POST'])
+@login_required
+def add_recipe():
+    if 'recipe-image' not in request.files:
+        return jsonify({"error": "Zdjęcie przepisu jest wymagane"}), 400
+
+    file = request.files['recipe-image']
+    if not file or not allowed_file(file.filename):
+        return jsonify({"error": "Nieprawidłowy format pliku"}), 400
+
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+    file.save(file_path)
+
+    data = request.form  # Pobieramy dane z formularza
+    if not data.get('recipe-name') or not data.get('recipe-category') or not data.get('recipe-ingredients') or not data.get('recipe-steps'):
+        return jsonify({"error": "Wszystkie pola są wymagane"}), 400
+
+    try:
+        new_recipe = Recipe(
+            name=data['recipe-name'],
+            category=data['recipe-category'],
+            ingredients=data['recipe-ingredients'],
+            steps=data['recipe-steps'],
+            user_id=current_user.id,
+            image_url=file_path  # Ścieżka do zapisanego pliku
+        )
+
+        db.session.add(new_recipe)
+        db.session.commit()
+
+        return jsonify({"message": "Przepis został dodany pomyślnie!"}), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Błąd podczas dodawania przepisu: {e}")
+        return jsonify({"error": f"Błąd podczas dodawania przepisu: {str(e)}"}), 500
+
+
+@main.route('/api/recipes', methods=['GET'])
+def get_recipes():
+    try:
+        category = request.args.get('category')
+        if category:
+            recipes = Recipe.query.filter_by(category=category).all()
+        else:
+            recipes = Recipe.query.all()
+
+        recipes_data = [
+            {
+                "id": recipe.id,
+                "name": recipe.name,
+                "category": recipe.category,
+                "ingredients": recipe.ingredients,
+                "steps": recipe.steps,
+                "image_url": f"/{recipe.image_url}"
+            }
+            for recipe in recipes
+        ]
+        return jsonify(recipes_data), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas pobierania przepisów: {e}")
+        return jsonify({"error": "Nie udało się pobrać przepisów"}), 500
+
+
+
+@main.route('/favorite/<int:recipe_id>', methods=['POST'])
+@login_required
+def add_to_favorites(recipe_id):
+    try:
+        # Logika dodawania do ulubionych
+        favorite = Favorite(user_id=current_user.id, recipe_id=recipe_id)
+        db.session.add(favorite)
+        db.session.commit()
+        return jsonify({"message": "Przepis dodano do ulubionych"}), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas dodawania do ulubionych: {e}")
+        return jsonify({"error": "Nie udało się dodać do ulubionych"}), 500
+
+
+@main.route('/recipe/<int:recipe_id>', methods=['GET'])
+def recipe_details(recipe_id):
+    try:
+        recipe = Recipe.query.get_or_404(recipe_id)
+        current_app.logger.info(f"Ścieżka obrazu dla przepisu {recipe.name}: {recipe.image_url}")
+        return render_template('recipe_details.html', recipe=recipe)
+    except Exception as e:
+        current_app.logger.error(f"Błąd: {e}")
+        return redirect(url_for('main.index'))
+
+
+@main.route('/contact', methods=['POST'])
+def contact():
+    try:
+        name = request.form.get('name')
+        email = request.form.get('email')
+        message = request.form.get('message')
+
+        if not name or not email or not message:
+            return jsonify({"error": "Wszystkie pola są wymagane"}), 400
+
+        # Tworzenie wiadomości
+        msg = Message(
+            subject=f"Nowa wiadomość od {name} ({email})",  # Adres e-mail w temacie
+            sender="twojmail@interia.pl",  # Zawsze wysyłaj z adresu Interia
+            recipients=["twojmail@interia.pl"],
+            body=f"Imię i nazwisko: {name}\nE-mail nadawcy: {email}\n\nWiadomość:\n{message}"
+        )
+        mail.send(msg)
+        return jsonify({"message": "Wiadomość została wysłana pomyślnie"}), 200
+
+    except Exception as e:
+        print(f"Błąd podczas wysyłania e-maila: {e}")
+        return jsonify({"error": "Wystąpił błąd podczas wysyłania wiadomości"}), 500

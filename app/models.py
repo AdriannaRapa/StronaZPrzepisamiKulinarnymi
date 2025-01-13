@@ -19,22 +19,18 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f'<User {self.name}>'
 
+
 class Recipe(db.Model):
-    __tablename__ = 'recipes'
+    __tablename__ = 'recipes'  # Upewnij się, że nazwa tabeli to 'recipes'
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     ingredients = db.Column(db.Text, nullable=False)
     steps = db.Column(db.Text, nullable=False)
-    description = db.Column(db.Text, nullable=True)  # Pole opisu
-    image_url = db.Column(db.String(255), nullable=True)  # URL obrazka przepisu
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    image_url = db.Column(db.String(255))
 
-    # Relacja z tabelą `favorites`
-    favorites = db.relationship('Favorite', backref='recipe', lazy=True)
-
-    def __repr__(self):
-        return f'<Recipe {self.name}>'
 
 class Favorite(db.Model):
     __tablename__ = 'favorites'
