@@ -52,41 +52,42 @@
       <div class="header-container bg-add_recipes d-flex justify-content-between align-items-center mb-4">
       </div>
       
-      <form id="recipe-form" enctype="multipart/form-data"></form>
+      <form id="recipe-form" enctype="multipart/form-data" method="POST" action="/recipes">
         <div class="mb-3">
           <label for="recipe-name" class="form-label">Nazwa przepisu</label>
-          <input type="text" class="form-control" id="recipe-name" placeholder="Wpisz nazwę przepisu" required>
+          <input type="text" class="form-control" id="recipe-name" name="recipe-name" placeholder="Wpisz nazwę przepisu" required>
         </div>
         <div class="mb-3">
           <label for="recipe-category" class="form-label">Kategoria</label>
-          <select class="form-select" id="recipe-category" required>
+          <select class="form-select" id="recipe-category" name="recipe-category" required>
             <option value="" disabled selected>Wybierz kategorię</option>
-            <option value>Śniadania</option>
-            <option value>Przystawki</option>
-            <option value>Obiady</option>
-            <option value>Desery</option>
-            <option value>Kolacje</option>
-            <option value>Przekąski</option>
-            <option value>Napoje</option>
+            <option value="Śniadania">Śniadania</option>
+            <option value="Przystawki">Przystawki</option>
+            <option value="Obiady">Obiady</option>
+            <option value="Desery">Desery</option>
+            <option value="Kolacje">Kolacje</option>
+            <option value="Przekąski">Przekąski</option>
+            <option value="Napoje">Napoje</option>
           </select>
         </div>
         <div class="mb-3">
           <label for="recipe-ingredients" class="form-label">Składniki</label>
-          <textarea class="form-control" id="recipe-ingredients" rows="5" placeholder="Wypisz składniki, jeden na linię" required></textarea>
+          <textarea class="form-control" id="recipe-ingredients" name="recipe-ingredients" rows="5" placeholder="Wypisz składniki, jeden na linię" required></textarea>
         </div>
         <div class="mb-3">
           <label for="recipe-steps" class="form-label">Sposób przygotowania</label>
-          <textarea class="form-control" id="recipe-steps" rows="5" placeholder="Opisz sposób przygotowania krok po kroku" required></textarea>
+          <textarea class="form-control" id="recipe-steps" name="recipe-steps" rows="5" placeholder="Opisz sposób przygotowania krok po kroku" required></textarea>
         </div>
         <div class="mb-3">
           <label for="recipe-image" class="form-label">Zdjęcie przepisu</label>
-          <input type="file" class="form-control" id="recipe-image" accept="image/*">
+          <input type="file" class="form-control" id="recipe-image" name="recipe-image" accept="image/*" required>
         </div>
         <div class="d-flex justify-content-end">
           <button type="submit" class="btn btn-primary me-2">Dodaj przepis</button>
           <button type="reset" class="btn btn-secondary">Wyczyść</button>
         </div>
       </form>
+      
       <div id="overlay-add-recipe" class="overlay hidden">
         <div class="overlay-content">
           <p>Aby dodać przepis, musisz być zalogowany!</p>

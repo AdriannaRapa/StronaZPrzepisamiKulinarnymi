@@ -299,22 +299,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
+  loadRecipes(); // Wywołanie funkcji przy załadowaniu strony
+});
+
+async function loadRecipes(category = null) {
   const container = document.getElementById("recipes-container");
+  //container.innerHTML = ""; // Wyczyść kontener
+
+  const url = category ? `/api/recipes?category=${category}` : "/api/recipes";
 
   try {
-    const response = await fetch("/api/recipes");
+    const response = await fetch(url);
     if (!response.ok) throw new Error("Nie udało się pobrać przepisów.");
 
     const recipes = await response.json();
 
-    // Tworzenie kart dla każdego przepisu
     recipes.forEach(recipe => {
       const card = document.createElement("div");
       card.classList.add("col-md-6", "mb-4");
       card.innerHTML = `
         <div class="recipe-card">
-          <span class="heart-icon" onclick="toggleFavorite(this)" data-recipe-id="${recipe.id}">&hearts;</span>
+          <span class="heart-icon" onclick="toggleFavorite(this, ${recipe.id})">&hearts;</span>
           <img src="${recipe.image_url}" alt="${recipe.name}" class="recipe-image">
           <h3>${recipe.name}</h3>
           <button class="btn btn-primary w-100 mt-2" onclick="showRecipeDetails(${recipe.id})">Przeglądaj</button>
@@ -326,7 +332,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("Błąd podczas ładowania przepisów:", error);
     container.innerHTML = "<p class='text-danger'>Nie udało się załadować przepisów. Spróbuj ponownie później.</p>";
   }
-});
+
+
+  console.log(recipes); // Wyświetli listę przepisów, w tym `image_url`
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function toggleFavorite(element) {
   alert("Dodano do ulubionych!");
@@ -354,32 +379,6 @@ function toggleFavorite(element, recipeId) {
     .catch(err => console.error("Błąd podczas sprawdzania statusu logowania:", err));
 }
 
-
-function loadRecipes(category = null) {
-  const container = document.getElementById("recipes-container");
-  container.innerHTML = ""; // Wyczyść kontener
-
-  const url = category ? `/api/recipes?category=${category}` : "/api/recipes";
-
-  fetch(url)
-    .then(response => response.json())
-    .then(recipes => {
-      recipes.forEach(recipe => {
-        const card = document.createElement("div");
-        card.classList.add("col-md-6", "mb-4");
-        card.innerHTML = `
-          <div class="recipe-card">
-            <span class="heart-icon" onclick="toggleFavorite(this, ${recipe.id})">&hearts;</span>
-            <img src="${recipe.image_url}" alt="${recipe.name}" class="recipe-image">
-            <h3>${recipe.name}</h3>
-            <button class="btn btn-primary w-100 mt-2" onclick="showRecipeDetails(${recipe.id})">Przeglądaj</button>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-    })
-    .catch(err => console.error("Błąd podczas ładowania przepisów:", err));
-}
 
 
 function showRecipeDetails(recipeId) {
@@ -420,3 +419,190 @@ document.getElementById("contact-form").addEventListener("submit", async (event)
     messageBox.textContent = "Wystąpił błąd podczas wysyłania wiadomości. Spróbuj ponownie później.";
   }
 });
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("recipe-form"); // Zmień na id formularza, który istnieje
+
+  if (form) {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); // Zatrzymuje domyślne przesłanie formularza
+
+      const formData = new FormData(form);
+
+      try {
+        const response = await fetch("/recipes", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) throw new Error("Nie udało się dodać przepisu.");
+
+        const result = await response.json();
+        alert(result.message);
+        window.location.href = "/recipes.html";
+      } catch (error) {
+        console.error("Błąd podczas dodawania przepisu:", error);
+        alert("Wystąpił problem podczas dodawania przepisu. Spróbuj ponownie później.");
+      }
+    });
+  } else {
+    console.error("Formularz z id 'recipe-form' nie został znaleziony.");
+  }
+});
+
+
+
+
+
+document.getElementById('ingredients').addEventListener('input', function () {
+  this.value = this.value.replace(/,/g, '\n'); // Zamiana przecinków na nową linię
+});
+
+
+
+async function loadRecipesByCategory(category, containerId) {
+  try {
+      const response = await fetch(`/api/recipes_by_category?category=${category}`);
+      if (!response.ok) throw new Error("Nie udało się pobrać przepisów.");
+
+      const recipes = await response.json();
+      const container = document.getElementById(containerId);
+
+      if (!container) return console.error(`Nie znaleziono kontenera o id: ${containerId}`);
+
+      container.innerHTML = ""; // Wyczyść poprzednią zawartość
+
+      recipes.forEach(recipe => {
+          const recipeCard = `
+              <div class="col-md-4 mb-4">
+                  <div class="card">
+                      <img src="${recipe.image_url}" class="card-img-top" alt="${recipe.name}">
+                      <div class="card-body">
+                          <h5 class="card-title">${recipe.name}</h5>
+                          <a href="/recipe/${recipe.id}" class="btn btn-primary">Zobacz przepis</a>
+                      </div>
+                  </div>
+              </div>
+          `;
+          container.innerHTML += recipeCard;
+      });
+  } catch (error) {
+      console.error(`Błąd podczas ładowania przepisów dla kategorii ${category}:`, error);
+  }
+}
+
+
+
+async function loadRecipesForCategory() {
+  try {
+      // Pobierz nazwę aktualnego pliku HTML
+      const path = window.location.pathname;
+      const currentFile = path.substring(path.lastIndexOf('/') + 1);
+
+      // Mapowanie plików HTML na kategorie
+      const categoryMap = {
+          "breakfast.html": "Śniadania",
+          "appetizers.html": "Przystawki",
+          "dinners.html": "Obiady",
+          "desserts.html": "Desery",
+          "suppers.html": "Kolacje",
+          "snacks.html": "Przekąski",
+          "drinks.html": "Napoje"
+      };
+
+      const category = categoryMap[currentFile];
+      if (!category) {
+          console.warn("Nie znaleziono kategorii dla bieżącej strony.");
+          return;
+      }
+
+      // Pobierz przepisy dla bieżącej kategorii
+      const response = await fetch(`/api/recipes_by_category?category=${encodeURIComponent(category)}`);
+      if (!response.ok) throw new Error("Nie udało się pobrać przepisów.");
+
+      const recipes = await response.json();
+      const container = document.querySelector('.row'); // Kontener dla przepisów
+
+      container.innerHTML = ""; // Wyczyść istniejące elementy
+
+      if (recipes.length === 0) {
+          container.innerHTML = "<p class='text-center'>Brak przepisów w tej kategorii.</p>";
+          return;
+      }
+
+      recipes.forEach(recipe => {
+          const card = `
+              <div class="col-md-4 mb-4">
+                  <div class="card">
+                      <img src="${recipe.image_url}" class="card-img-top" alt="${recipe.name}">
+                      <div class="card-body">
+                          <h5 class="card-title">${recipe.name}</h5>
+                          <a href="/recipe/${recipe.id}" class="btn btn-primary">Zobacz przepis</a>
+                      </div>
+                  </div>
+              </div>
+          `;
+          container.innerHTML += card;
+      });
+  } catch (error) {
+      console.error("Błąd podczas ładowania przepisów:", error);
+      const container = document.querySelector('.row');
+      container.innerHTML = "<p class='text-danger'>Wystąpił problem podczas ładowania przepisów. Spróbuj ponownie później.</p>";
+  }
+}
+
+// Wywołanie funkcji po załadowaniu strony
+document.addEventListener("DOMContentLoaded", loadRecipesForCategory);
+
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+      const response = await fetch('/api/favorites');
+      if (!response.ok) throw new Error("Nie udało się pobrać ulubionych przepisów.");
+
+      const favorites = await response.json();
+      const container = document.getElementById('favorites-container');
+
+      container.innerHTML = ""; // Wyczyść istniejące elementy
+
+      if (favorites.length === 0) {
+          container.innerHTML = "<p class='text-center'>Nie masz jeszcze ulubionych przepisów.</p>";
+          return;
+      }
+
+      favorites.forEach(recipe => {
+          const card = `
+              <div class="col-md-4 mb-4">
+                  <div class="card">
+                      <img src="${recipe.image_url}" class="card-img-top" alt="${recipe.name}">
+                      <div class="card-body">
+                          <h5 class="card-title">${recipe.name}</h5>
+                          <p>Kategoria: ${recipe.category}</p>
+                          <button class="btn btn-danger" onclick="removeFavorite(${recipe.id})">Usuń z ulubionych</button>
+                      </div>
+                  </div>
+              </div>
+          `;
+          container.innerHTML += card;
+      });
+  } catch (error) {
+      console.error("Błąd podczas ładowania ulubionych przepisów:", error);
+      const container = document.getElementById('favorites-container');
+      container.innerHTML = "<p class='text-danger'>Nie udało się załadować ulubionych przepisów. Spróbuj ponownie później.</p>";
+  }
+});
+
+
+async function removeFavorite(recipeId) {
+  try {
+      const response = await fetch(`/favorite/${recipeId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error("Nie udało się usunąć przepisu z ulubionych.");
+
+      alert("Przepis został usunięty z ulubionych.");
+      location.reload(); // Odśwież stronę, aby zaktualizować listę
+  } catch (error) {
+      console.error("Błąd podczas usuwania przepisu z ulubionych:", error);
+      alert("Wystąpił problem. Spróbuj ponownie później.");
+  }
+}

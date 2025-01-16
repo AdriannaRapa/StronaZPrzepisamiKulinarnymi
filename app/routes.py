@@ -2,7 +2,7 @@ from flask import Blueprint, flash, redirect, request, jsonify, url_for, render_
 from app.models import User, Favorite, Recipe
 from flask_login import login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
-import re
+import re, os
 from flask_mail import Message
 from app import mail, db
 import secrets
@@ -309,16 +309,13 @@ def update_password():
 
 @main.route('/search', methods=['GET'])
 def search():
-    query = request.args.get('query', '').strip()  # Pobierz zapytanie z parametrów URL
+    query = request.args.get('query', '').strip()
     if not query:
         return render_template('search_results.html', recipes=[], query=query)
 
-    # Wyszukiwanie w tabeli Recipe
     results = Recipe.query.filter(
-        (Recipe.name.ilike(f"%{query}%")) | (Recipe.description.ilike(f"%{query}%"))
+        (Recipe.name.ilike(f"%{query}%")) | (Recipe.ingredients.ilike(f"%{query}%"))
     ).all()
-
-    # Przekazanie wyników do szablonu
     return render_template('search_results.html', recipes=results, query=query)
 
 
@@ -423,39 +420,37 @@ def allowed_file(filename):
 @main.route('/recipes', methods=['POST'])
 @login_required
 def add_recipe():
-    if 'recipe-image' not in request.files:
-        return jsonify({"error": "Zdjęcie przepisu jest wymagane"}), 400
-
-    file = request.files['recipe-image']
-    if not file or not allowed_file(file.filename):
-        return jsonify({"error": "Nieprawidłowy format pliku"}), 400
-
-    filename = secure_filename(file.filename)
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
-
-    data = request.form  # Pobieramy dane z formularza
-    if not data.get('recipe-name') or not data.get('recipe-category') or not data.get('recipe-ingredients') or not data.get('recipe-steps'):
-        return jsonify({"error": "Wszystkie pola są wymagane"}), 400
-
     try:
+        # Obsługa plików i danych formularza
+        file = request.files.get('recipe-image')
+        if not file or not allowed_file(file.filename):
+            return jsonify({"error": "Nieprawidłowy format pliku"}), 400
+
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+
+        data = request.form
+        if not all([data.get('recipe-name'), data.get('recipe-category'), data.get('recipe-ingredients'), data.get('recipe-steps')]):
+            return jsonify({"error": "Wszystkie pola są wymagane"}), 400
+
+        # Dodanie przepisu do bazy danych
         new_recipe = Recipe(
             name=data['recipe-name'],
             category=data['recipe-category'],
             ingredients=data['recipe-ingredients'],
             steps=data['recipe-steps'],
             user_id=current_user.id,
-            image_url=file_path  # Ścieżka do zapisanego pliku
+            image_url=f"static/uploads/{filename}"
         )
-
         db.session.add(new_recipe)
         db.session.commit()
 
-        return jsonify({"message": "Przepis został dodany pomyślnie!"}), 201
+        # Zwróć przekierowanie do sekcji "Przepisy"
+        return redirect(url_for('main.render_page', page='recipes'))
     except Exception as e:
-        db.session.rollback()
         current_app.logger.error(f"Błąd podczas dodawania przepisu: {e}")
-        return jsonify({"error": f"Błąd podczas dodawania przepisu: {str(e)}"}), 500
+        return jsonify({"error": "Wystąpił problem podczas dodawania przepisu"}), 500
 
 
 @main.route('/api/recipes', methods=['GET'])
@@ -488,8 +483,11 @@ def get_recipes():
 @main.route('/favorite/<int:recipe_id>', methods=['POST'])
 @login_required
 def add_to_favorites(recipe_id):
+    existing_favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
+    if existing_favorite:
+        return jsonify({"message": "Przepis już znajduje się w ulubionych"}), 400
+
     try:
-        # Logika dodawania do ulubionych
         favorite = Favorite(user_id=current_user.id, recipe_id=recipe_id)
         db.session.add(favorite)
         db.session.commit()
@@ -497,6 +495,10 @@ def add_to_favorites(recipe_id):
     except Exception as e:
         current_app.logger.error(f"Błąd podczas dodawania do ulubionych: {e}")
         return jsonify({"error": "Nie udało się dodać do ulubionych"}), 500
+
+
+
+
 
 
 @main.route('/recipe/<int:recipe_id>', methods=['GET'])
@@ -533,3 +535,89 @@ def contact():
     except Exception as e:
         print(f"Błąd podczas wysyłania e-maila: {e}")
         return jsonify({"error": "Wystąpił błąd podczas wysyłania wiadomości"}), 500
+
+
+
+from sqlalchemy.sql.expression import func
+
+@main.route('/api/random_recipes', methods=['GET'])
+def get_random_recipes():
+    try:
+        # Pobierz 4 losowe przepisy z bazy danych
+        recipes = Recipe.query.order_by(func.random()).limit(4).all()
+        recipes_data = [
+            {
+                "id": recipe.id,
+                "name": recipe.name,
+                "category": recipe.category,
+                "ingredients": recipe.ingredients,
+                "steps": recipe.steps,
+                "image_url": f"/{recipe.image_url}"
+            }
+            for recipe in recipes
+        ]
+        return jsonify(recipes_data), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas pobierania losowych przepisów: {e}")
+        return jsonify({"error": "Nie udało się pobrać losowych przepisów"}), 500
+
+
+@main.route('/api/recipes_by_category', methods=['GET'])
+def get_recipes_by_category():
+    try:
+        category = request.args.get('category')
+        if not category:
+            return jsonify({"error": "Brak podanej kategorii"}), 400
+
+        recipes = Recipe.query.filter_by(category=category).all()
+        recipes_data = [
+            {
+                "id": recipe.id,
+                "name": recipe.name,
+                "image_url": f"/{recipe.image_url}",
+                "ingredients": recipe.ingredients,
+                "steps": recipe.steps
+            }
+            for recipe in recipes
+        ]
+        return jsonify(recipes_data), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas pobierania przepisów: {e}")
+        return jsonify({"error": "Nie udało się pobrać przepisów"}), 500
+
+
+@main.route('/api/favorites', methods=['GET'])
+@login_required
+def get_favorites():
+    try:
+        favorites = db.session.query(Favorite).filter_by(user_id=current_user.id).join(Recipe).distinct(Recipe.id).all()
+        favorite_recipes = [
+            {
+                "id": favorite.recipe.id,
+                "name": favorite.recipe.name,
+                "category": favorite.recipe.category,
+                "image_url": f"/{favorite.recipe.image_url}"
+            }
+            for favorite in favorites
+        ]
+        return jsonify(favorite_recipes), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas pobierania ulubionych przepisów: {e}")
+        return jsonify({"error": "Nie udało się pobrać ulubionych przepisów"}), 500
+
+
+
+@main.route('/favorite/<int:recipe_id>', methods=['DELETE'])
+@login_required
+def remove_favorite(recipe_id):
+    try:
+        favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
+        if not favorite:
+            return jsonify({"error": "Przepis nie znajduje się w ulubionych"}), 404
+
+        db.session.delete(favorite)
+        db.session.commit()
+        return jsonify({"message": "Przepis został usunięty z ulubionych"}), 200
+    except Exception as e:
+        current_app.logger.error(f"Błąd podczas usuwania ulubionych: {e}")
+        return jsonify({"error": "Nie udało się usunąć przepisu z ulubionych"}), 500

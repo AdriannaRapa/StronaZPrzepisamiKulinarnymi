@@ -13,29 +13,25 @@
     <div class="container">
       <div class="top-menu">
         <div>
-          <img src="../static/images/logo.png" alt="FoodLab Logo" class="logo">
+          <!-- Logo dynamicznie dodawane przez JavaScript -->
         </div>
         <form class="d-flex search-bar">
-          <input class="form-control" type="search" placeholder="Wyszukaj..." aria-label="Wyszukaj">
+          <input class="form-control" type="search" id="search-input" placeholder="Wyszukaj..." aria-label="Wyszukaj">
         </form>
         <div>
-          <a href="register.html" class="btn btn-outline-primary me-2">Rejestracja</a>
-          <a href="login.html" class="btn btn-outline-success">Logowanie</a>
+          <!-- Przyciski dynamicznie dodawane przez JavaScript -->
         </div>
       </div>
-      <!-- Przycisk rozwijanego menu -->
       <button class="menu-toggle d-block d-md-none">MENU</button>
-      <!-- Menu główne -->
       <nav class="main-nav">
         <a href="index.html">Strona główna</a>
-        <a href="recipes.html" class="active">Przepisy</a>
+        <a href="recipes.html">Przepisy</a>
         <a href="converter.html">Przelicznik</a>
         <a href="forum.html">Forum</a>
         <a href="favourites.html">Ulubione</a>
       </nav>
     </div>
   </header>
-
   <!-- Zawartość -->
   <div class="container d-flex mt-4">
     <!-- Menu boczne -->
@@ -89,7 +85,9 @@
       </div>
     </div>
 
-      <div class="row">
+    <div class="row" id="recipes-container">
+      <!-- Przepisy zostaną tutaj załadowane -->
+      </div>
       
       </div>
     </main>

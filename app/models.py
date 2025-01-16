@@ -29,7 +29,7 @@ class Recipe(db.Model):
     ingredients = db.Column(db.Text, nullable=False)
     steps = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    image_url = db.Column(db.String(255))
+    image_url = db.Column(db.String(255), nullable=False)
 
 
 class Favorite(db.Model):
@@ -37,6 +37,9 @@ class Favorite(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
+
+    # Relacja do przepisu
+    recipe = db.relationship('Recipe', backref='favorites')
 
     def __repr__(self):
         return f'<Favorite UserID: {self.user_id}, RecipeID: {self.recipe_id}>'

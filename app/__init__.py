@@ -11,13 +11,17 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 mail = Mail()
 
+
+
+
 def create_app():
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/foodlab_db?charset=utf8mb4'
 
     app.config['SECRET_KEY'] = 'your_secret_key'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = 'static/uploads'  # Folder na zdjęcia przepisów
+    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static/uploads')
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Maksymalny rozmiar pliku: 16MB
     app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg'}
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  # Utwórz folder, jeśli nie istnieje
